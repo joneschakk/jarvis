@@ -170,7 +170,7 @@ case $state in
             fi
             ;;
 		three)
-				echo "Three"
+				echo "Case three"
 			if [ "$sub_state" == "b" ]; then
                 echo "In a"     
                 shutdown_mode="p"
@@ -188,18 +188,18 @@ case $state in
             fi
             ;;
 		custom)
-				echo "Custom - LS09 issue"
+				echo "Custom - x issue"
 			if [ "$sub_state" == "b" ]; then
-				echo "PANIC"
-				runtime=0
+				echo "In a"
+				runtime=10
 				sleep_time=1
 				sub_state="b"
-				shutdown_mode='p'
-			elif [ "$sub_state" == "a" ]; then 
-				echo "fill"
-				runtime=1
-                sleep_time=1
-                #sub_state="b"			
+				shutdown_mode='m'
+			# elif [ "$sub_state" == "a" ]; then 
+			# 	echo "fill"
+			# 	runtime=1
+            #     sleep_time=1
+            #     sub_state="b"			
 			fi			
 			;;
 	esac		
@@ -212,18 +212,18 @@ case $state in
 		fi
 	elif [ "$shutdown_mode" == "g" ]; then
 		shutdown_toggle=0
-	
+        echo "Graceful SHST"
 	elif [ "$shutdown_mode" == "p" ]; then
 		shutdown_toggle=1
 		echo "Panic SHST"
 	fi
 
-	if [ $time_based == 0 ]; then
-		runtime=$((10+RANDOM%5))
-	else
-		runtime=$((time_based))
-	fi
-	echo "Iter count $i, Toggle value $shutdown_toggle, Random timing $runtime"
+	# if [ $time_based == 0 ]; then   #Random timing 10-15mins
+	# 	runtime=$((10+RANDOM%5))
+	# else
+	# 	runtime=$((time_based))
+	# fi
+echo "Iter count $i, Toggle value $shutdown_toggle, Random timing $runtime"
 
 ssh root@"$hostname" mkdir -p "$fio_log_path" 
 
@@ -233,19 +233,18 @@ if [ "$shutdown_toggle" == "0" ]; then
 	else
 		sleep "$sleep_time"m
 	fi	
-	        echo "Unload driver"
-        sleep 5
-        ssh root@"$hostname" "rmmod nvme"
-        ssh user@"$hostname"-hws1 ./panic_screen.sh stop #use them
-        screen_file="$screen_path""$((i+1))".log
-        ssh user@"$hostname"-hws1 ./panic_screen.sh load "$usb_screen" "$screen_file"   # load screen #use them
-        count "Rdy"
+    echo "Unload driver"
+    sleep 5
+    ssh root@"$hostname" "rmmod nvme"
+    ssh user@"$hostname"-hws1 ./panic_screen.sh stop #use them
+    screen_file="$screen_path""$((i+1))".log
+    ssh user@"$hostname"-hws1 ./panic_screen.sh load "$usb_screen" "$screen_file"   # load screen #use them
+    count "Rdy"
     echo "Load driver"
-        ssh root@"$hostname" "modprobe nvme"
-        comp "$prev_word_count" "Rdy" 4
-        sleep 20
+    ssh root@"$hostname" "modprobe nvme"
+    comp "$prev_word_count" "Rdy" 4
+    sleep 20
 
-	
 else
 	if [ "$runtime" != 0 ]; then
 #		ssh root@"$hostname" $host_script_path $fio_config_path $i $fio_log_path$fiolog_filename $runtime &
