@@ -34,8 +34,8 @@ jtag=0
 
 count(){       # get count of "WCCEN" print
 	keyword=$1
-  	prev_word_count=$(ssh user@"$hostname"-hws1 "grep -c $keyword $screen_file")
-	prev_timeout=$(ssh user@"$hostname"-hws1 "grep -c \"TIMEOUT\"  $screen_file")
+  	prev_word_count=$(ssh user@"$hws_name"-hws1 "grep -c $keyword $screen_file")
+	prev_timeout=$(ssh user@"$hws_name"-hws1 "grep -c \"TIMEOUT\"  $screen_file")
 }
 
 comp(){        # check for either "WCCEN" print or "Rdy" print of MCPU
@@ -47,17 +47,17 @@ comp(){        # check for either "WCCEN" print or "Rdy" print of MCPU
     while [ "$check" != "$((prev_word_count+max_words))" ]; do
         chk_cnt=$((chk_cnt+1))
 	    echo "Checking for $keyword"
-        check=$(ssh user@"$hostname"-hws1 "grep -c $keyword $screen_file")
- 	    check_timeout=$(ssh user@"$hostname"-hws1 "grep -c \"TIMEOUT\" $screen_file")
+        check=$(ssh user@"$hws_name"-hws1 "grep -c $keyword $screen_file")
+ 	    check_timeout=$(ssh user@"$hws_name"-hws1 "grep -c \"TIMEOUT\" $screen_file")
     	sleep 20
     done
   echo "$keyword caught progressing..."
 }
 
-ssh user@"$hws"-hws1 mkdir -p "$screen_path" 
-ssh user@"$hws"-hws1 ./panic_screen.sh load "$usb_screen" "$screen_file"   # load screen
+ssh user@"$hws_name"-hws1 mkdir -p "$screen_path" 
+ssh user@"$hws_name"-hws1 ./panic_screen.sh load "$usb_screen" "$screen_file"   # load screen
 echo "Screen loaded in hws"
-trap "echo clean-up; ssh user@$hostname-hws1 ./panic_screen.sh stop; exit" 1 2 9 EXIT    # runs if there's an interrupt signal or exit
+trap "echo clean-up; ssh user@"$hws_name"-hws1 ./panic_screen.sh stop; exit" 1 2 9 EXIT    # runs if there's an interrupt signal or exit
 echo " All scp n ssh over"
 
 #### State defines ####
@@ -236,9 +236,9 @@ if [ "$shutdown_toggle" == "0" ]; then
     echo "Unload driver"
     sleep 5
     ssh root@"$hostname" "rmmod nvme"
-    ssh user@"$hostname"-hws1 ./panic_screen.sh stop #use them
+    ssh user@"$hws_name"-hws1 ./panic_screen.sh stop #use them
     screen_file="$screen_path""$((i+1))".log
-    ssh user@"$hostname"-hws1 ./panic_screen.sh load "$usb_screen" "$screen_file"   # load screen #use them
+    ssh user@"$hws_name"-hws1 ./panic_screen.sh load "$usb_screen" "$screen_file"   # load screen #use them
     count "Rdy"
     echo "Load driver"
     ssh root@"$hostname" "modprobe nvme"
@@ -259,13 +259,13 @@ else
 	curl --digest -u pnet:\<pnetlogn\> -X PUT -H "X-CSRF: x" --data "value=false" "http://pnet2/restapi/relay/outlets/0/state/" #0-taal in pnet
 	sleep 20
     echo "Slept for 20s"
-	ssh user@"$hostname"-hws1 ./panic_screen.sh stop
+	ssh user@"$hws_name"-hws1 ./panic_screen.sh stop
 	echo "Stopped sccript"
 #	ipmitool -H "$hostname"-ipmi -U ADMIN -P user1234 power on
 	curl --digest -u pnet:\<pnetlogn\> -X PUT -H "X-CSRF: x" --data "value=true" "http://pnet2/restapi/relay/outlets/0/state/" #0-taal value=true/false -  on/off state
 	sleep 10
 	screen_file="$screen_path""$((i+1))".log
-  	ssh user@"$hostname"-hws1 ./panic_screen.sh load "$usb_screen" "$screen_file"   # load screen
+  	ssh user@"$hws_name"-hws1 ./panic_screen.sh load "$usb_screen" "$screen_file"   # load screen
     echo "Screen loaded"
    	sleep 20
     echo "Counting for Rdy after panic shutdown"
