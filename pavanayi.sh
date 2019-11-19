@@ -86,7 +86,7 @@ while [ "$i" -lt "$iter" ]; do
             echo "Programming Bitfiles"
 
             rm -rf check_load*
-            $vivado_dir -mode batch -source loadbm.tcl -nojournal -log check_load.viv -tclargs $hws $config_flash >   log  2>&1  # program fpgas
+            $vivado_dir -mode batch -source loadbm.tcl -nojournal -log check_load.viv -tclargs $hws $config_flash $kmain $kaux1 $kaux2>   log  2>&1  # program fpgas
 
             fpga_count=$(egrep -c "End of startup status: HIGH" check_load.viv)
             if [ "$fpga_count" != 3 ]; then
