@@ -10,9 +10,20 @@ vivado_dir="/tool/Xilinx/Vivado/2017.3/bin/vivado"
 read -p "Enter host name" hostname
 read -p "Enter hws name" hws_name
 read -p "Enter host shutdown mode" shutdown_mode
+if [ $shutdown_mode == 'p' ]; then
+    read -p "0.Pnet device 1.IPMI on/off" pnet2
+    if [ $pnet2 == '0' ]; then
+    read -p "Enter host pnet number" pnet_no
+fi
+fi
 read -p "Enter time based 0.Random-timing or specify a time" time_based
 read -p "Enter Iteration count " iter
 read -p "Enter name of Test sequence " test_name
+read -p "Enter option 0.Current state 1.FTP" ftp
+read -p "1.JTAG load" jtag
+if [ $jtag == '1' ]; then
+    read -p "0.Config flash or 1.Bitfile load" config_flash
+fi
 # read -p "Enter name of fio config path" kiki
 #read -p "Serial screen number"  screen_no
 prev_word_count=0		# compare fn
@@ -23,14 +34,14 @@ screen_path=""$home_dir"/"$d"/"$test_name"/"
 screen_no=$( ssh user@alap-hws1 echo  /dev/ttyUSB* | awk '{ print $(NF-1) }' )
 usb_screen="/dev/ttyUSB"$screen_no""
 
-host_script_path="/test/shared/validation/panic/jones_test/scripts/"
-fio_log_path=" /test/shared/validation/panic/jones_test/fiologs/"$d"/"$hostname"/"$test_name""
+# host_script_path="/test/shared/validation/panic/jones_test/scripts/"
+fio_log_path=" $PWD/"$d"/"$hostname"/"$test_name""
 fiolog_filename="$test_name"
-fio_config_path="/test/shared/validation/panic/jones_test/fill.fio"
+# fio_config_path="/test/shared/validation/panic/jones_test/fill.fio"
 
 screen_file="$screen_path"1.log
 prev_timeout=0
-jtag=0
+# jtag=0
 
 count(){       # get count of "WCCEN" print
 	keyword=$1
@@ -55,7 +66,8 @@ comp(){        # check for either "WCCEN" print or "Rdy" print of MCPU
 }
 
 ssh user@"$hws_name"-hws1 mkdir -p "$screen_path" 
-ssh user@"$hws_name"-hws1 ./panic_screen.sh load "$usb_screen" "$screen_file"   # load screen
+ssh user@"$hws_name" stty -F "$usb_screen" 115200 -icrnl -opost -onlcr -isig -icanon -echo time 2  min 100 ; cat "$usb_screen" >>  "$screen_file"
+# ssh user@"$hws_name"-hws1 ./panic_screen.sh load "$usb_screen" "$screen_file"   # load screen
 echo "Screen loaded in hws"
 trap "echo clean-up; ssh user@"$hws_name"-hws1 ./panic_screen.sh stop; exit" 1 2 9 EXIT    # runs if there's an interrupt signal or exit
 echo " All scp n ssh over"
@@ -67,14 +79,14 @@ i=1
 
 while [ "$i" -lt "$iter" ]; do
 	if [ "$jtag" == 1 ] ; then
-		if [ "$shutdown_toggle" == "1" ]; then     #this will be the prev state if it is mix ie if prev was panic we need to flash
+		# if [ "$config_flash" == "1" ]; then     #this will be the prev state if it is mix ie if prev was panic we need to flash
 		    ### Load bitmap ###
             echo "In Jtag"
             count "Rdy"
             echo "Programming Bitfiles"
 
             rm -rf check_load*
-            $vivado_dir -mode batch -source loadbm.tcl -nojournal -log check_load.viv -tclargs $hws  >   log  2>&1  # program fpgas
+            $vivado_dir -mode batch -source loadbm.tcl -nojournal -log check_load.viv -tclargs $hws $config_flash >   log  2>&1  # program fpgas
 
             fpga_count=$(egrep -c "End of startup status: HIGH" check_load.viv)
             if [ "$fpga_count" != 3 ]; then
@@ -94,7 +106,7 @@ while [ "$i" -lt "$iter" ]; do
             conn=$?
             done
 
-            #if [ $((i)) -gt 2 ]; then
+            # if [ $((i)) -gt 2 ]; then
             #reebot
             sleep 20
             echo "Rebooting"
@@ -102,21 +114,21 @@ while [ "$i" -lt "$iter" ]; do
             ##sleep
             sleep 320
             #fi
-        fi
+        # fi
     fi
+############### As 12TB boards didnt meet 2min enumeration constraint
+# conn=1 
+# while [ $conn != "0" ]; do
+# echo "Ping-ing to host after Startup"
+# ping -c 1 "$hostname" > /dev/null 2>&1
+#    conn=$?
+# done
 
-conn=1
-while [ $conn != "0" ]; do
-echo "Ping-ing to host after Startup"
-ping -c 1 "$hostname" > /dev/null 2>&1
-   conn=$?
-done
-
-sleep 20
-echo "Rebooting"
-ssh root@"$hostname" "./reboot.sh"
-sleep 30
-
+# sleep 20
+# echo "Rebooting"
+# ssh root@"$hostname" "./reboot.sh"
+# sleep 30
+#########################################################
 conn=1
 while [ $conn != "0" ]; do
 echo "Ping-ing to host after reboot"
@@ -132,77 +144,77 @@ echo "Checking for nvme partition"
     echo "$check"
   done
 ########### Random scenarios cases ###########
-case $state in
-        one)
-			echo "Case one"
-                        if [ "$sub_state" == "b" ]; then
-				echo "In a"
-				shutdown_mode="p"
-				runtime=$((1+RANDOM%5))
-				sleep_time=$((runtime+1))
-				state="one"
-                sub_state="b" #edit-for only panic
-				#sub_state="a"
-			elif [ "$sub_state" == "a" ]; then
-				echo "In b"
-				shutdown_mode="g"
-				runtime=$((1+RANDOM%5))
-				state="two"
-                sub_state="b"
-			fi
-			;;
-		two)
-			 echo "Case two"
-			if [ "$sub_state" == "b" ]; then
-                echo "In a"
-				shutdown_mode="p"
-                runtime=$((1+RANDOM%6))
-                sleep_time=$((runtime))               
-				state="two"
-				sub_state="a"
-            elif [ "$sub_state" == "a" ]; then      
-                echo "In b"
-                shutdown_mode="g"
-                runtime=0
-                sleep_time=1
-                state="three"
-                sub_state="b"
-            fi
-            ;;
-		three)
-				echo "Case three"
-			if [ "$sub_state" == "b" ]; then
-                echo "In a"     
-                shutdown_mode="p"
-                runtime=$((1+RANDOM%5))
-                sleep_time=$((runtime+1))
-                state="three"
-                sub_state="a"
-            elif [ "$sub_state" == "a" ]; then      
-                echo "in b"
-				shutdown_mode="p"
-                runtime=0
-                sleep_time=1
-				state="one"
-                sub_state="b"
-            fi
-            ;;
-		custom)
-				echo "Custom - x issue"
-			if [ "$sub_state" == "b" ]; then
-				echo "In a"
-				runtime=10
-				sleep_time=1
-				sub_state="b"
-				shutdown_mode='m'
-			# elif [ "$sub_state" == "a" ]; then 
-			# 	echo "fill"
-			# 	runtime=1
-            #     sleep_time=1
-            #     sub_state="b"			
-			fi			
-			;;
-	esac		
+# case $state in
+#         one)
+# 			echo "Case one"
+#                         if [ "$sub_state" == "b" ]; then
+# 				echo "In a"
+# 				shutdown_mode="p"
+# 				runtime=$((1+RANDOM%5))
+# 				sleep_time=$((runtime+1))
+# 				state="one"
+#                 sub_state="b" #edit-for only panic
+# 				#sub_state="a"
+# 			elif [ "$sub_state" == "a" ]; then
+# 				echo "In b"
+# 				shutdown_mode="g"
+# 				runtime=$((1+RANDOM%5))
+# 				state="two"
+#                 sub_state="b"
+# 			fi
+# 			;;
+# 		two)
+# 			 echo "Case two"
+# 			if [ "$sub_state" == "b" ]; then
+#                 echo "In a"
+# 				shutdown_mode="p"
+#                 runtime=$((1+RANDOM%6))
+#                 sleep_time=$((runtime))               
+# 				state="two"
+# 				sub_state="a"
+#             elif [ "$sub_state" == "a" ]; then      
+#                 echo "In b"
+#                 shutdown_mode="g"
+#                 runtime=0
+#                 sleep_time=1
+#                 state="three"
+#                 sub_state="b"
+#             fi
+#             ;;
+# 		three)
+# 				echo "Case three"
+# 			if [ "$sub_state" == "b" ]; then
+#                 echo "In a"     
+#                 shutdown_mode="p"
+#                 runtime=$((1+RANDOM%5))
+#                 sleep_time=$((runtime+1))
+#                 state="three"
+#                 sub_state="a"
+#             elif [ "$sub_state" == "a" ]; then      
+#                 echo "in b"
+# 				shutdown_mode="p"
+#                 runtime=0
+#                 sleep_time=1
+# 				state="one"
+#                 sub_state="b"
+#             fi
+#             ;;
+# 		custom)
+# 				echo "Custom - x issue"
+# 			if [ "$sub_state" == "b" ]; then
+# 				echo "In a"
+# 				runtime=10
+# 				sleep_time=1
+# 				sub_state="b"
+# 				shutdown_mode='m'
+# 			# elif [ "$sub_state" == "a" ]; then 
+# 			# 	echo "fill"
+# 			# 	runtime=1
+#             #     sleep_time=1
+#             #     sub_state="b"			
+# 			fi			
+# 			;;
+# 	esac		
 ########### Mode toggle for mix, always 1 for panic ##########
 	if [ "$shutdown_mode" == "m" ]; then
 		if [ $((i%2)) -eq "0" ]; then
@@ -218,11 +230,12 @@ case $state in
 		echo "Panic SHST"
 	fi
 
-	# if [ $time_based == 0 ]; then   #Random timing 10-15mins
-	# 	runtime=$((10+RANDOM%5))
-	# else
-	# 	runtime=$((time_based))
-	# fi
+	if [ $time_based == 0 ]; then   #Random timing 10-15mins
+		runtime=$((10+RANDOM%5))
+	else
+		runtime=$((time_based))
+	fi
+    
 echo "Iter count $i, Toggle value $shutdown_toggle, Random timing $runtime"
 
 ssh root@"$hostname" mkdir -p "$fio_log_path" 
@@ -236,9 +249,10 @@ if [ "$shutdown_toggle" == "0" ]; then
     echo "Unload driver"
     sleep 5
     ssh root@"$hostname" "rmmod nvme"
-    ssh user@"$hws_name"-hws1 ./panic_screen.sh stop #use them
+    ssh user@"$hws_name"-hws1 killall screen #use them
     screen_file="$screen_path""$((i+1))".log
-    ssh user@"$hws_name"-hws1 ./panic_screen.sh load "$usb_screen" "$screen_file"   # load screen #use them
+    ssh user@"$hws_name" stty -F "$usb_screen" 115200 -icrnl -opost -onlcr -isig -icanon -echo time 2  min 100 ; cat "$usb_screen" >>  "$screen_file"
+    # ssh user@"$hws_name"-hws1 ./panic_screen.sh load "$usb_screen" "$screen_file"   # load screen #use them
     count "Rdy"
     echo "Load driver"
     ssh root@"$hostname" "modprobe nvme"
@@ -247,25 +261,33 @@ if [ "$shutdown_toggle" == "0" ]; then
 
 else
 	if [ "$runtime" != 0 ]; then
-#		ssh root@"$hostname" $host_script_path $fio_config_path $i $fio_log_path$fiolog_filename $runtime &
-		ssh root@"$hostname" "cd $host_script_path && ./panic_host.sh $fio_config_path $i $fio_log_path$fiolog_filename $runtime &"
+        sleep_time=$((runtime+1))
+		ssh root@"$hostname" /test/shared/FIO/fio-2.12/bin/fio --eta=always --eta-newline=1 --runtime="$runtime"m | tee "$fio_log_path$fiolog_filename"_"$i" &
+        #$host_script_path $fio_config_path $i $fio_log_path$fiolog_filename $runtime &
+		# ssh root@"$hostname" "cd $host_script_path && ./panic_host.sh $fio_config_path $i $fio_log_path$fiolog_filename $runtime &"
 	fi
 
     echo "Runtime $runtime , Sleeping for $sleep_time mins"
     sleep "$sleep_time"m
 
 	echo "Panic shutdown"
-#	ipmitool -H "$hostname"-ipmi -U ADMIN -P user1234 chassis power off
-	curl --digest -u pnet:\<pnetlogn\> -X PUT -H "X-CSRF: x" --data "value=false" "http://pnet2/restapi/relay/outlets/0/state/" #0-taal in pnet
+    if [ $pnet2 == '0' && $pnet_no ]; then
+    	curl --digest -u pnet:\<pnetlogn\> -X PUT -H "X-CSRF: x" --data "value=false" "http://pnet2/restapi/relay/outlets/$((pnet_no-1))/state/" #1-taal in pnet
+    else
+        ipmitool -H "$hostname"-ipmi -U ADMIN -P user1234 chassis power off
 	sleep 20
     echo "Slept for 20s"
 	ssh user@"$hws_name"-hws1 ./panic_screen.sh stop
 	echo "Stopped sccript"
-#	ipmitool -H "$hostname"-ipmi -U ADMIN -P user1234 power on
-	curl --digest -u pnet:\<pnetlogn\> -X PUT -H "X-CSRF: x" --data "value=true" "http://pnet2/restapi/relay/outlets/0/state/" #0-taal value=true/false -  on/off state
-	sleep 10
+
+    if [ $pnet2 == '0' && $pnet_no ]; then
+	    curl --digest -u pnet:\<pnetlogn\> -X PUT -H "X-CSRF: x" --data "value=true" "http://pnet2/restapi/relay/outlets/$((pnet_no-1))/state/" #1-taal value=true/false -  on/off state
+	else
+        ipmitool -H "$hostname"-ipmi -U ADMIN -P user1234 power on
+    sleep 10
 	screen_file="$screen_path""$((i+1))".log
-  	ssh user@"$hws_name"-hws1 ./panic_screen.sh load "$usb_screen" "$screen_file"   # load screen
+    ssh user@"$hws_name" stty -F "$usb_screen" 115200 -icrnl -opost -onlcr -isig -icanon -echo time 2  min 100 ; cat "$usb_screen" >>  "$screen_file"
+  	# ssh user@"$hws_name"-hws1 ./panic_screen.sh load "$usb_screen" "$screen_file"   # load screen
     echo "Screen loaded"
    	sleep 20
     echo "Counting for Rdy after panic shutdown"
